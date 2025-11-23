@@ -1,91 +1,135 @@
-Microservicio de Carga de Pedidos (Prueba Técnica)
 
-API REST desarrollada con Java 17 y Spring Boot 3 bajo Arquitectura Hexagonal. Permite la carga masiva de pedidos desde archivos CSV con validaciones de negocio, persistencia en PostgreSQL y manejo de idempotencia.
+# 📦 MicroServicio de Carga de Pedidos
 
-📋 Características Principales
-
-Arquitectura Hexagonal: Separación estricta entre Dominio, Aplicación e Infraestructura.
-
-Batch Processing: Estrategia de carga optimizada para minimizar consultas a BD.
-
-Idempotencia: Validación por Idempotency-Key y Hash SHA-256 del archivo.
-
-Flyway: Versionamiento de base de datos automatizado.
-
-Seguridad: Preparado para OAuth2 Resource Server (JWT).
-
-🚀 Instrucciones de Ejecución
-
-Prerrequisitos
-
-Java 17+
-
-Docker (o PostgreSQL local en puerto 5433)
-
-Maven
-
-Paso 1: Base de Datos
-
-Usa Docker, levanta la base de datos desde la raiz del proyecto con el comando:
-
-docker-compose up -d
+Este proyecto es una prueba técnica que implementa un API REST para la carga masiva de pedidos desde archivos CSV.
+Esta construido siguiendo estrictamente los principios de Arquitectura Hexagonal (Ports & Adapters) para asegurar el desacoplamiento y la mantenibilidad
 
 
-Esto iniciará PostgreSQL en el puerto 5433 con la base de datos pedidos_db.
-
-Paso 2: Ejecutar la Aplicación
-
-./mvnw spring-boot:run
 
 
-Flyway ejecutará automáticamente las migraciones (V1 y V2) al iniciar.
+## 📋 **Características Principales**
 
-Paso 3: Probar (Swagger)
+* **Arquitectura Hexagonal:** Separación clara entre Dominio (reglas de negocio), Aplicación (casos de uso) e Infraestructura (Web, Persistencia).
 
-Accede a la documentación interactiva:
+* **Procesamiento Batch:** Estrategia optimizada para validar y persistir grandes volúmenes de datos con mínimo impacto en la base de datos.
 
-URL: http://localhost:8080/swagger-ui.html
+* **Idempotencia:** Control de duplicidad basado en Idempotency-Key y Hash SHA-256 del contenido del archivo.
 
-Endpoint: POST /pedidos/cargar
+* **Flyway:** Gestión automatizada de versiones y migraciones de base de datos.
 
-Nota sobre Seguridad: El proyecto está configurado en modo Permisivo para facilitar la evaluación. Para activar la validación estricta de JWT, revisar SecurityConfig.java.
+* **Validaciones de Negocio:** Reglas complejas (Cadena de frío, fechas futuras, clientes activos) validadas en el dominio.
 
-🧪 Ejecución de Pruebas
+* **Seguridad:** Configuración preparada para OAuth2 Resource Server (JWT).
+## 🚀 **Guía de Inicio Rápido**
 
-El proyecto cuenta con pruebas unitarias usando JUnit 5 y Mockito.
+**Prerrequisitos**
 
-Desde Terminal:
+Java 17 o superior.
 
-mvn test
+Docker Desktop (recomendado para la base de datos).
+
+Maven (opcional, el proyecto incluye el wrapper mvnw).
+    
+**1. Levantar la infraestructura (Base de datos)**  
+El proyecto incluye un archivo docker-compose.yml en la raíz. Ejecuta:
+
+```bash
+  docker-compose up -d
+```
+
+Esto iniciará una instancia en PostgreSQL en el puerto 5433 con la base de datos ```pedidos_db```
+
+**2. Ejecutar la aplicacion**  
+Usa el wrapper de Maven incluido para iniciar el servicio:
+
+**En Mac/Linux**
+```bash
+  ./mvnw spring-boot:run
+```
+
+**En Windows**
+```bash
+  mvnw.cmd spring-boot:run
+```
+
+*Nota: Al iniciar, Flyway ejecutará automáticamente los scripts `V1` y`V2` para crear las tablas y poblar los datos de prueba.*
 
 
-Cobertura:
-Se ha priorizado la cobertura del servicio de dominio CargarPedidosService, validando:
+## 🧪 **Como Probar la API**
 
-Carga exitosa completa.
+**Documentación Interactiva (Swagger UI)**
 
-Detección de errores de negocio (fechas pasadas, clientes inactivos).
+Una vez levantada la aplicación, accede a:
+👉 http://localhost:8080/swagger-ui.html
 
-Bloqueo por idempotencia duplicada.
+**Usando Postman**
 
-⚡ Estrategia de Batch
+En la raíz de este repositorio encontrarás el archivo `pedidos_collection.json`
 
-Para cumplir con el requisito de procesar hasta 1000 registros eficientemente, se implementó la siguiente estrategia en CargarPedidosService:
+**1.**  Abre Postman
 
-Lectura en Memoria: Se parsea el CSV completo a objetos Java (OpenCSV).
+**2.**  Importa dicho archivo 
 
-Recolección de IDs: Se extraen todos los IDs de Clientes, Zonas y Números de Pedido en Set<String>.
+**3.** Usa la petición pre-configurada "Cargar Pedidos CSV
 
-Consultas Agrupadas (Bulk Fetch):
+**Archivos de Prueba (Samples)**  
 
-Se realiza 1 consulta para traer todos los Clientes involucrados (findAllById).
+En la carpeta `/samples` de este repositorio encontrarás el archivo `pedidos_prueba.csv` diseñado para probar tanto casos exitosos como errores de validación(clientes inactivos, zonas sin frio, fechas pasadas).
 
-Se realiza 1 consulta para traer todas las Zonas involucradas.
 
-Se realiza 1 consulta para verificar duplicados existentes.
+## ⚡ **Estrategia de Batch**
 
-Procesamiento en Memoria: Se itera la lista validando contra los mapas en memoria (O(1)).
+Para cumplir con el requisito de eficiencia y bajo consumo de recursos en cargas masivas(500-1000 reigstros), se implementó la siguiente lógica en `CargarPedidosService` :
 
-Persistencia Batch: Los pedidos válidos se guardan en una sola operación transaccional (saveAll), aprovechando las optimizaciones de Hibernate JDBC Batch.
+* Lectura Streaming: Se lee el CSV utilizando OpenCSV para mapear las filas a objetos Java.
 
-Resultado: Se reduce la interacción con la BD de ~4000 consultas (N*4) a solo 4 consultas + 1 insert batch, independientemente del tamaño del archivo.
+* Recolección de Claves: Se extraen todos los IDs (Clientes, Zonas, Números de Pedido) en Sets en memoria.
+
+* Bulk Fetching (Consultas Masivas):
+
+  Se realiza 1 sola consulta a la DB para traer todos los Clientes requeridos.
+
+  Se realiza 1 sola consulta a la DB para traer todas las Zonas requeridas.
+
+  Se realiza 1 sola consulta para verificar duplicados existentes.
+
+* #Validación en Memoria: Se iteran los registros validando reglas de negocio contra los mapas en memoria (complejidad O(1)), evitando el problema "N+1 queries".
+
+* Batch Insert: Los pedidos válidos se persisten utilizando saveAll(), aprovechando las optimizaciones de JDBC Batch de Hibernate.
+
+**Resultado: El proceso realiza 4 interacciones con la base de datos independientemente del tamaño del archivo, en lugar de realizar una consulta por cada fila.**
+
+## 🔒 **Seguridad**
+
+El proyecto incluye la dependencia spring-boot-starter-oauth2-resource-server.
+
+* Modo Evaluación (Actual): La configuración de seguridad (SecurityConfig.java) está en modo PERMISIVO por defecto. Esto permite probar los endpoints y visualizar Swagger sin necesidad de configurar un proveedor de identidad externo (IdP).
+
+* Modo Producción: En el código se encuentran comentadas las líneas necesarias para activar la validación estricta de tokens JWT (.authenticated()), cumpliendo con el requisito de "Todas las rutas protegidas".
+
+## 📂 **Estructura del Proyecto(Hexagonal)**
+
+```bash
+com.prueba.pruebaTecnica
+├── application          # Casos de uso y Servicios (Orquestación)
+├── domain               # Lógica pura de negocio (Modelos, Puertos)
+└── infrastructure       # Adaptadores (REST Controller, JPA Entities, Config)
+```
+
+## 🛠 **Tecnologías**
+
+* Spring Boot 3.5.8
+
+* Java 17
+
+* PostgreSQL
+
+* Flyway Migration
+
+* Lombok
+
+* OpenCSV
+
+* OpenAPI (SpringDoc)
+
+* JUnit 5 & Mockito
